@@ -2,12 +2,45 @@ let postcss = require('postcss')
 
 let plugin = require('./')
 
-function run (input, output, opts) {
-  let result = postcss([plugin(opts)]).process(input, { from: '/test.css' })
-  expect(result.css).toEqual(output)
+function checkResult (result, expected) {
+  expect(result.css).toEqual(expected)
   expect(result.warnings()).toHaveLength(0)
   return result
 }
+
+async function runWithPlugins (plugins, input, output) {
+  let result = await postcss(plugins).process(input, { from: '/test.css' })
+  return checkResult(result, output)
+}
+
+function run (input, output, opts) {
+  let result = postcss([plugin(opts)]).process(input, { from: '/test.css' })
+  return checkResult(result, output)
+}
+
+it('works in functions', () => {
+  run('$x: 1; a{ left: calc($x / 2) }', 'a{ left: calc(1 / 2) }')
+})
+
+it('works with cssnano', async () => {
+  await runWithPlugins(
+    [
+      plugin(),
+      require('cssnano')({ preset: ['default', { calc: false }] }),
+      require('postcss-calc')()
+    ],
+    '$x: 1; a{ left: calc($x / 2) }',
+    'a{left:0.5}'
+  )
+})
+
+it('works with postcss-calc', async () => {
+  await runWithPlugins(
+    [plugin(), require('postcss-calc')()],
+    '$x: 1; a{ left: calc($x / 2) }',
+    'a{ left: 0.5 }'
+  )
+})
 
 it('replaces variables in values', () => {
   run(
